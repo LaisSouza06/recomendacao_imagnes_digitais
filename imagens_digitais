@@ -1,0 +1,69 @@
+import tensorflow as tf
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.preprocessing import image
+from tensorflow.keras.applications.vgg16 import preprocess_input
+import numpy as np
+import os
+import cv2
+from sklearn.metrics.pairwise import cosine_similarity
+import matplotlib.pyplot as plt
+
+# Função para carregar e pré-processar a imagem
+def load_and_process_image(img_path):
+    img = image.load_img(img_path, target_size=(224, 224))  # Redimensionar para 224x224
+    img_array = image.img_to_array(img)  # Converter para array NumPy
+    img_array = np.expand_dims(img_array, axis=0)  # Adicionar batch dimension
+    img_array = preprocess_input(img_array)  # Pré-processamento para VGG16
+    return img_array
+
+# Carregar o modelo VGG16 pré-treinado sem a parte de classificação final
+model = VGG16(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+
+# Função para extrair as características da imagem
+def extract_features(img_array):
+    features = model.predict(img_array)  # Predição de características
+    features = features.flatten()  # Achatar a matriz de características
+    return features
+
+# Função para calcular a similaridade entre as características de duas imagens
+def calculate_similarity(features1, features2):
+    return cosine_similarity([features1], [features2])[0][0]
+
+# Função principal de recomendação de imagens
+def recommend_images(input_image_path, image_folder_path, top_n=5):
+    # Carregar e processar a imagem de entrada
+    input_img_array = load_and_process_image(input_image_path)
+    input_features = extract_features(input_img_array)
+    
+    # Carregar todas as imagens do diretório e calcular a similaridade
+    image_paths = [os.path.join(image_folder_path, f) for f in os.listdir(image_folder_path) if f.endswith('.jpg')]
+    similarities = []
+    
+    for img_path in image_paths:
+        img_array = load_and_process_image(img_path)
+        features = extract_features(img_array)
+        sim = calculate_similarity(input_features, features)
+        similarities.append((img_path, sim))
+    
+    # Ordenar pela similaridade
+    similarities.sort(key=lambda x: x[1], reverse=True)
+    
+    # Retornar as N imagens mais similares
+    recommended_images = [x[0] for x in similarities[:top_n]]
+    
+    return recommended_images
+
+# Função para exibir as imagens recomendadas
+def display_recommended_images(recommended_images):
+    for img_path in recommended_images:
+        img = cv2.imread(img_path)
+        plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        plt.axis('off')
+        plt.show()
+
+# Exemplo de uso
+if __name__ == "__main__":
+    input_image = 'path_to_input_image.jpg'  # Substitua pelo caminho da imagem de entrada
+    image_folder = 'path_to_image_folder'  # Substitua pelo diretório contendo as imagens para comparação
+    recommended_images = recommend_images(input_image, image_folder, top_n=5)
+    display_recommended_images(recommended_images)
